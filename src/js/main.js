@@ -1,152 +1,159 @@
+
 import iziToast from 'izitoast';
-import 'izitoast/dist/css/iziToast.min.css';
 import SimpleLightbox from 'simplelightbox';
-import 'simplelightbox/dist/simple-lightbox.min.css';
 import axios from 'axios';
+import errorSvg from '/img/error.svg';
 
-document.addEventListener('DOMContentLoaded', function () {
-  const loaderContainer = document.getElementById('loader-container');
-  const searchForm = document.getElementById('searchForm');
-  const searchInput = document.getElementById('searchInput');
-  const gallery = document.getElementById('gallery');
-  const loadMoreButton = document.getElementById('loadMoreButton');
+const API_BASE_URL = 'https://pixabay.com/api/';
+const API_KEY = '41942411-47547b04f91f4c6a01d45aac7';
 
-  const apiKey = '41942411-47547b04f91f4c6a01d45aac7';
-  let currentPage = 1;
-  let totalHits = 0;
-  let currentSearchTerm = '';
+axios.defaults.baseURL = API_BASE_URL;
 
-  hideLoader(loaderContainer);
-  loadMoreButton.style.display = 'none';
+let limit;
 
-  searchForm.addEventListener('submit', async function (e) {
-    e.preventDefault();
-    currentPage = 1;
-    loadMoreButton.style.display = 'none';
+const searchParams = {
+  key: API_KEY,
+  q: '',
+  image_type: 'photo',
+  orientation: 'horizontal',
+  safesearch: 'true',
+  per_page: 40,
+  page: 1,
+};
 
-    const searchTerm = searchInput.value.trim();
-    if (searchTerm === '') {
-      iziToast.error({
-        title: 'Error',
-        message: 'Please enter a search term',
-      });
-      hideLoader(loaderContainer);
-      return;
-    }
-    currentSearchTerm = searchTerm;
-    showLoader(loaderContainer);
-    try {
-      await fetchData(currentSearchTerm);
-    } finally {
-      hideLoader(loaderContainer);
-    }
-  });
-
-  async function fetchData(searchTerm) {
-    try {
-      const response = await axios.get('https://pixabay.com/api/', {
-        params: {
-          key: apiKey,
-          q: searchTerm,
-          image_type: 'photo',
-          orientation: 'horizontal',
-          safesearch: true,
-          per_page: 40,
-          page: currentPage,
-        },
-      });
-
-      totalHits = response.data.totalHits;
-
-      gallery.innerHTML = '';
-
-      if (response.data.hits.length === 0) {
-        iziToast.error({
-          title: 'Error',
-          message: 'No images found for the provided search term',
-        });
-      } else {
-        displayImages(response.data.hits);
-
-        if (currentPage * 40 >= totalHits) {
-          loadMoreButton.style.display = 'none';
-        } else {
-          loadMoreButton.style.display = 'block';
-        }
-      }
-    } catch (error) {
-      iziToast.error({
-        title: 'Error',
-        message: 'Failed to fetch images. Please try again later.',
-      });
-    }
-  }
-
-  loadMoreButton.addEventListener('click', async function () {
-    currentPage++;
-    await fetchData(currentSearchTerm);
-    smoothScroll();
-  });
-  function smoothScroll() {
-    const cardHeight = document
-      .querySelector('.gallery-item')
-      .getBoundingClientRect().height;
-
-    window.scrollTo({
-      top: window.scrollY + cardHeight * 2,
-      behavior: 'smooth',
-    });
-  }
-  function showLoader(loaderContainer) {
-    if (loaderContainer) {
-      loaderContainer.style.display = 'block';
-    }
-  }
-
-  function hideLoader(loaderContainer) {
-    if (loaderContainer) {
-      loaderContainer.style.display = 'none';
-    }
-  }
-
-  function displayImages(images) {
-    const galleryHTML = images
-      .map(image => {
-        return `
-         <div class="gallery-item">
-      <a href="${image.largeImageURL}" data-lightbox="gallery" data-title="Likes: ${image.likes}, Views: ${image.views}, Comments: ${image.comments}, Downloads: ${image.downloads}">
-          <img src="${image.webformatURL}" alt="${image.tags}" data-src="${image.largeImageURL}" data-caption="Likes: ${image.likes}, Views: ${image.views}, Comments: ${image.comments}, Downloads: ${image.downloads}">
-        </a>
-        <div class="image-stats">
-      <div class="stat-item">
-        <p class="stat-label">Likes:</p>
-        <p class="stat-value">${image.likes}</p>
-      </div>
-      <div class="stat-item">
-        <p class="stat-label">Views:</p>
-        <p class="stat-value">${image.views}</p>
-      </div>
-      <div class="stat-item">
-        <p class="stat-label">Comments:</p>
-        <p class="stat-value">${image.comments}</p>
-      </div>
-      <div class="stat-item">
-        <p class="stat-label">Downloads:</p>
-        <p class="stat-value">${image.downloads}</p>
-      </div>
-    </div>
-    </div>
-      `;
-      })
-      .join('');
-
-    gallery.insertAdjacentHTML('beforeend', galleryHTML);
-
-    const lightbox = new SimpleLightbox('.gallery a', {
-      captionsData: 'alt',
-      captionDelay: 250,
-    });
-
-    lightbox.refresh();
-  }
+const simpleGallery = new SimpleLightbox('.gallery a', {
+  overlayOpacity: 0.8,
+  captionsData: 'alt',
+  captionDelay: 500,
 });
+
+const form = document.querySelector('.gallery-form');
+const searchInput = document.querySelector('.search-input');
+const gallery = document.querySelector('.gallery');
+const loader = document.querySelector('.loader');
+const loadMoreBtn = document.querySelector('.load-more-btn');
+
+async function startSearch(event) {
+  event.preventDefault();
+  if (!searchInput.value.trim()) {
+    showErrorMessage('Please fill in the search field');
+    return;
+  }
+  try {
+    gallery.innerHTML = '';
+    isContentVisible(loader, true);
+    isContentVisible(loadMoreBtn, false);
+    searchParams.q = searchInput.value.trim();
+    searchParams.page = 1;
+    const data = await fetchPhotos();
+    limit = data.totalHits;
+    createGallery(data);
+  } catch (error) {
+    console.log(error);
+  }
+}
+
+async function loadMore() {
+  try {
+    isContentVisible(loader, true);
+    isContentVisible(loadMoreBtn, false);
+    const photos = await fetchPhotos();
+    createGallery(photos);
+  } catch (error) {
+    console.log(error);
+  }
+}
+
+async function fetchPhotos() {
+  const response = await axios.get('', { params: searchParams });
+  return response.data;
+}
+
+function createGallery(photos) {
+  if (!photos.total) {
+    showErrorMessage(
+      'Sorry, there are no images matching your search query. Please, try again!'
+    );
+    isContentVisible(loader, false);
+    return;
+  }
+  const markup = photos.hits
+    .map(
+      ({
+        largeImageURL,
+        webformatURL,
+        tags,
+        likes,
+        views,
+        comments,
+        downloads,
+      }) => {
+        return `
+        <li class="gallery-item">
+        <a class="gallery-link" href="${largeImageURL}">
+        <img class="api-img" src="${webformatURL}" alt="${tags}">
+        <div class="img-desc">
+        <span><b>Likes:</b> <br/>${likes}</span>
+        <span><b>Views:</b> <br/>${views}</span>
+        <span><b>Comments:</b> <br/>${comments}</span>
+        <span><b>Downloads:</b> <br/>${downloads}</span>
+        </div>
+        </a>
+        </li>
+        `;
+      }
+    )
+    .join('');
+  gallery.insertAdjacentHTML('beforeend', markup);
+  isContentVisible(loader, false);
+  checkLimit();
+  scrollPage();
+  simpleGallery.refresh();
+  form.reset();
+}
+
+function checkLimit() {
+  if (Math.ceil(limit / searchParams.per_page) === searchParams.page) {
+    showErrorMessage(
+      "We're sorry, but you've reached the end of search results."
+    );
+  } else {
+    searchParams.page += 1;
+    isContentVisible(loadMoreBtn, true);
+  }
+}
+
+function isContentVisible(content, isVisible) {
+  if (isVisible) {
+    content.classList.remove('hidden');
+  } else {
+    content.classList.add('hidden');
+  }
+}
+
+function scrollPage() {
+  if (searchParams.page > 1) {
+    const rect = document
+      .querySelector('.gallery-item')
+      .getBoundingClientRect();
+    window.scrollBy({ top: rect.height * 2, left: 0, behavior: 'smooth' });
+  }
+}
+
+function showErrorMessage(message) {
+  iziToast.show({
+    position: 'topRight',
+    iconUrl: errorSvg,
+    message,
+    backgroundColor: '#EF4040',
+    messageColor: '#FAFAFB',
+    messageSize: '16px',
+    close: false,
+    closeOnClick: true,
+    closeOnEscape: true,
+  });
+}
+
+form.addEventListener('submit', event => startSearch(event));
+
+loadMoreBtn.addEventListener('click', () => loadMore());
