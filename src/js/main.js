@@ -2,7 +2,7 @@
 import iziToast from 'izitoast';
 import SimpleLightbox from 'simplelightbox';
 import axios from 'axios';
-import errorSvg from '/img/error.svg';
+
 
 const API_BASE_URL = 'https://pixabay.com/api/';
 const API_KEY = '41942411-47547b04f91f4c6a01d45aac7';
