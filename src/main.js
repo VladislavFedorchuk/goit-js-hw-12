@@ -145,7 +145,6 @@ function scrollPage() {
 function showErrorMessage(message) {
   iziToast.show({
     position: 'topRight',
-    iconUrl: errorSvg,
     message,
     backgroundColor: '#EF4040',
     messageColor: '#FAFAFB',
