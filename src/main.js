@@ -1,4 +1,3 @@
-
 import iziToast from 'izitoast';
 import SimpleLightbox from 'simplelightbox';
 import axios from 'axios';
@@ -113,7 +112,9 @@ function createGallery(photos) {
 }
 
 function checkLimit() {
-  if (Math.ceil(limit / searchParams.per_page) === searchParams.page) {
+  const totalPages = Math.ceil(limit / searchParams.per_page);
+
+  if (totalPages > 0 && searchParams.page > totalPages) {
     showErrorMessage(
       "We're sorry, but you've reached the end of search results."
     );
@@ -122,6 +123,7 @@ function checkLimit() {
     isContentVisible(loadMoreBtn, true);
   }
 }
+
 
 function isContentVisible(content, isVisible) {
   if (isVisible) {
